@@ -1,5 +1,6 @@
+<div align="center">
 <p align="center">
-  <img src="./images/Image1.png" width="80" alt="GiftsFlow Logo" />
+  <img src="./images/Image1.png" width="250" alt="GiftsFlow Logo" />
 </p>
 
 # GiftsFlow
@@ -11,7 +12,8 @@ _Chat. Gift. Automate. Celebrate._
 <p align="center">
   <a href="#getting-started"><img src="https://img.shields.io/badge/Getting%20Started-Guide-blue?style=flat-square" /></a>
   <a href="#license"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" /></a>
-  <a href="https://github.com/giftsflow/giftsflow/stargazers"><img src="https://img.shields.io/github/stars/giftsflow/giftsflow?style=flat-square" /></a>
+  <a href="https://github.com/Growth-Loops-Technology/GiftsFlow/stargazers"><img src="https://img.shields.io/github/stars/Growth-Loops-Technology/GiftsFlow?style=flat-square" />
+</a>
 </p>
 
 ---
@@ -21,6 +23,7 @@ Build delightful gifting experiences powered by chat, AI, and automation.
 *Start simple. Scale into a full gifting ecosystem.*
 
 ---
+</div>
 
 ## 🚀 Why GiftsFlow?
 
