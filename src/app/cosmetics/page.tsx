@@ -35,6 +35,7 @@ export default function CosmeticsChatbot() {
         { role: "bot", text: data.message || "Sorry, I couldn’t find cosmetic data." },
       ]);
     } catch (error) {
+      console.error(error);
       setMessages((prev) => [
         ...prev,
         { role: "bot", text: "Something went wrong. Please try again." },
