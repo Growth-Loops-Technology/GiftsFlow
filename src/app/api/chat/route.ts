@@ -1,23 +1,42 @@
 import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
+import { streamText } from "ai";
 import { findRelevantContent } from "@/lib/vector/upstashVector";
+
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { message } = body as { message?: string };
+    console.log("🔥 API HIT");
 
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return Response.json(
-        { error: "Missing or invalid message." },
-        { status: 400 }
-      );
+    const { messages } = await req.json();
+    console.log("🔥 Messages:", messages);
+
+    if (!messages || !Array.isArray(messages)) {
+      return new Response("Invalid request", { status: 400 });
     }
 
-    const hits = await findRelevantContent(message.trim(), 4);
+    // ✅ Convert UIMessage -> ModelMessage
+    const formattedMessages = messages.map((m) => ({
+      role: m.role,
+      content:
+        m.parts
+          ?.filter((p: { type: string; text: string; }) => p.type === "text")
+          ?.map((p: { text: string; }) => p.text)
+          ?.join(" ") || "",
+    }));
+
+    const lastUserMessage =
+      formattedMessages[formattedMessages.length - 1]?.content;
+
+    if (!lastUserMessage) {
+      return new Response("Missing message text", { status: 400 });
+    }
+
+    // 🔎 RAG
+    const hits = await findRelevantContent(lastUserMessage, 4);
+
     const contextText =
       hits.length > 0
         ? hits
@@ -27,27 +46,21 @@ export async function POST(request: Request) {
         : "";
 
     const systemPrompt = contextText
-      ? `You are a helpful gift shop assistant. Answer using only the following product/knowledge base. If the answer is not in the context, say you don't have that information.\n\nKnowledge base:\n${contextText}`
-      : "You are a helpful gift shop assistant. You have no product data in the knowledge base yet. Ask the user to upload an Excel file via the portal, or answer general gift ideas politely.";
+      ? `You are a helpful gift shop assistant. Answer ONLY using the knowledge base below.
 
-    const result = await generateText({
+Knowledge base:
+${contextText}`
+      : `You are a helpful gift shop assistant. No product data uploaded yet. Politely suggest uploading via portal.`;
+
+    const result = streamText({
       model: openai("gpt-4o-mini"),
       system: systemPrompt,
-      prompt: message.trim(),
+      messages: formattedMessages, // ✅ Correct format now
     });
 
-    return Response.json({ message: result.text });
-  } catch (err: unknown) {
-    console.error("Chat API error:", err);
-    const status = (err as { status?: number })?.status === 429 ? 429 : 500;
-    return Response.json(
-      {
-        error:
-          status === 429
-            ? "OpenAI quota exceeded."
-            : "Internal server error. Check server logs.",
-      },
-      { status }
-    );
+    return result.toUIMessageStreamResponse();
+  } catch (error) {
+    console.error("💥 Chat API error:", error);
+    return new Response("Internal Server Error", { status: 500 });
   }
 }

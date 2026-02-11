@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { z } from "zod";
-import { upsertEmbeddingsWithMetadata } from "@/lib/vector/upstashVector";
+import {
+  upsertEmbeddingsWithMetadata,
+} from "@/lib/vector/upstashVector";
+
+export const runtime = "nodejs";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = [
@@ -9,52 +13,31 @@ const ALLOWED_TYPES = [
   "application/vnd.ms-excel",
 ];
 
-/**
- * Normalize column names (case-insensitive, trim whitespace).
- */
+/* ----------------------------- Utilities ----------------------------- */
+
 function normalizeColumnName(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/**
- * Find column name (case-insensitive) in headers.
- */
-function findColumn(
-  headers: string[],
-  target: string
-): string | undefined {
+function findColumn(headers: string[], target: string): string | undefined {
   const normalized = normalizeColumnName(target);
   return headers.find((h) => normalizeColumnName(h) === normalized);
 }
 
-/**
- * Validate required columns exist and extract them.
- */
-function validateAndExtractColumns(
-  rows: Record<string, unknown>[]
-): {
-  nameCol: string;
-  descriptionCol: string;
-  imageCol: string;
-  otherCols: string[];
-} {
+function validateAndExtractColumns(rows: Record<string, unknown>[]) {
   if (rows.length === 0) {
     throw new Error("No rows to validate");
   }
+
   const headers = Object.keys(rows[0]);
+
   const nameCol = findColumn(headers, "name");
   const descriptionCol = findColumn(headers, "description");
   const imageCol = findColumn(headers, "image");
 
-  if (!nameCol) {
-    throw new Error('Required column "Name" not found');
-  }
-  if (!descriptionCol) {
-    throw new Error('Required column "Description" not found');
-  }
-  if (!imageCol) {
-    throw new Error('Required column "Image" not found');
-  }
+  if (!nameCol) throw new Error('Required column "Name" not found');
+  if (!descriptionCol) throw new Error('Required column "Description" not found');
+  if (!imageCol) throw new Error('Required column "Image" not found');
 
   const otherCols = headers.filter(
     (h) =>
@@ -66,60 +49,44 @@ function validateAndExtractColumns(
   return { nameCol, descriptionCol, imageCol, otherCols };
 }
 
-/**
- * Fetch image metadata from URL (dimensions, content-type, etc.).
- */
-async function fetchImageMetadata(
-  imageUrl: string
-): Promise<{
-  url: string;
-  width?: number;
-  height?: number;
-  contentType?: string;
-  size?: number;
-  valid: boolean;
-}> {
+/* --------------------------- Image Metadata --------------------------- */
+
+async function fetchImageMetadata(imageUrl: string) {
+  if (!imageUrl.startsWith("http")) {
+    return { url: imageUrl, valid: false };
+  }
+
   try {
     const response = await fetch(imageUrl, { method: "HEAD" });
     if (!response.ok) {
       return { url: imageUrl, valid: false };
     }
+
     const contentType = response.headers.get("content-type") || undefined;
     const contentLength = response.headers.get("content-length");
     const size = contentLength ? parseInt(contentLength, 10) : undefined;
 
-    // Try to get dimensions if it's an image
-    if (contentType?.startsWith("image/")) {
-      // For dimensions, we'd need to fetch the image, but that's expensive.
-      // For now, just return what we have from HEAD.
-      return {
-        url: imageUrl,
-        contentType,
-        size,
-        valid: true,
-      };
-    }
-    return { url: imageUrl, contentType, size, valid: true };
+    return {
+      url: imageUrl,
+      contentType,
+      size,
+      valid: true,
+    };
   } catch (err) {
-    console.warn(`Failed to fetch image metadata for ${imageUrl}:`, err);
+    console.warn(`Image metadata fetch failed: ${imageUrl}`, err);
     return { url: imageUrl, valid: false };
   }
 }
 
-/**
- * Convert a row to chunk text and extract image metadata.
- */
+/* ------------------------- Row Transformation ------------------------- */
+
 async function rowToChunkWithMetadata(
   row: Record<string, unknown>,
   nameCol: string,
   descriptionCol: string,
   imageCol: string,
   otherCols: string[]
-): Promise<{
-  chunk: string;
-  imageUrl: string;
-  imageMetadata: Awaited<ReturnType<typeof fetchImageMetadata>>;
-}> {
+) {
   const name = String(row[nameCol] ?? "").trim();
   const description = String(row[descriptionCol] ?? "").trim();
   const imageUrl = String(row[imageCol] ?? "").trim();
@@ -130,8 +97,8 @@ async function rowToChunkWithMetadata(
     );
   }
 
-  // Build chunk text: prioritize Name and Description, then other fields
   const parts: string[] = [`Name: ${name}`, `Description: ${description}`];
+
   otherCols.forEach((col) => {
     const val = row[col];
     if (val != null && String(val).trim() !== "") {
@@ -145,11 +112,13 @@ async function rowToChunkWithMetadata(
   return { chunk, imageUrl, imageMetadata };
 }
 
+/* ------------------------------- POST -------------------------------- */
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file");
-    const shopId = formData.get("shopId"); // optional
+    const shopId = formData.get("shopId");
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -160,17 +129,19 @@ export async function POST(request: Request) {
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
-        { error: `File too large. Maximum size is ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.` },
+        { error: "File too large. Max 5MB allowed." },
         { status: 400 }
       );
     }
 
     const contentType = file.type;
     const name = file.name.toLowerCase();
+
     const isExcel =
       name.endsWith(".xlsx") ||
       name.endsWith(".xls") ||
       ALLOWED_TYPES.includes(contentType);
+
     if (!isExcel) {
       return NextResponse.json(
         { error: "Invalid file type. Use .xlsx or .xls." },
@@ -178,8 +149,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const parsedShopId =
+      typeof shopId === "string"
+        ? z.string().min(1).parse(shopId.trim())
+        : null;
+
+    const resourceId = parsedShopId
+      ? `shop-${parsedShopId}`
+      : `batch-${Date.now()}`;
+
+    /* ------------------ Delete Old Vectors (Reupload Case) ------------------ */
+
+   
+
+    /* ------------------------ Parse Excel ------------------------ */
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
+
     const firstSheetName = workbook.SheetNames[0];
     if (!firstSheetName) {
       return NextResponse.json(
@@ -187,67 +174,47 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
     const sheet = workbook.Sheets[firstSheetName];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
     if (rows.length === 0) {
       return NextResponse.json(
-        { error: "No data rows found. Ensure the first row is headers." },
+        { error: "No data rows found." },
         { status: 400 }
       );
     }
 
-    // Validate required columns exist
-    let columns;
-    try {
-      columns = validateAndExtractColumns(rows);
-    } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Column validation failed" },
-        { status: 400 }
-      );
-    }
+    const columns = validateAndExtractColumns(rows);
 
-    // Process rows: extract chunks and image metadata
-    const rowData = await Promise.all(
-      rows.map((row) =>
-        rowToChunkWithMetadata(
+    /* ---------------- Sequential Processing (Safer) ---------------- */
+
+    const rowData = [];
+
+    for (const row of rows) {
+      rowData.push(
+        await rowToChunkWithMetadata(
           row,
           columns.nameCol,
           columns.descriptionCol,
           columns.imageCol,
           columns.otherCols
         )
-      )
-    );
-
-    // Validate all rows have required fields
-    const invalidRows = rowData.filter((r) => !r.chunk || !r.imageUrl);
-    if (invalidRows.length > 0) {
-      return NextResponse.json(
-        {
-          error: `${invalidRows.length} row(s) missing required fields (Name, Description, or Image).`,
-        },
-        { status: 400 }
       );
     }
 
-    const resourceId =
-      typeof shopId === "string" && shopId.trim()
-        ? `shop-${z.string().min(1).parse(shopId.trim())}-${Date.now()}`
-        : `batch-${Date.now()}`;
+    /* ----------------------- Upsert Vectors ----------------------- */
 
     await upsertEmbeddingsWithMetadata(resourceId, rowData);
 
     const validImages = rowData.filter((r) => r.imageMetadata.valid).length;
-    const invalidImages = rowData.length - validImages;
 
     return NextResponse.json({
       success: true,
       resourceId,
       rowsUpserted: rowData.length,
       imagesValid: validImages,
-      imagesInvalid: invalidImages,
+      imagesInvalid: rowData.length - validImages,
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -256,7 +223,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
     console.error("Portal upload error:", err);
+
     return NextResponse.json(
       { error: "Failed to process upload. Check server logs." },
       { status: 500 }
