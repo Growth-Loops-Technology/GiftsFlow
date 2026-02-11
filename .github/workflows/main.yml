@@ -6,7 +6,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: develop
+    environment: main
     env:
       CI: false
     steps:
