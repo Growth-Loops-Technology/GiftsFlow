@@ -1,0 +1,15 @@
+name: Deploy Next.js App 1
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: develop
+    env:
+      CI: false
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        run: |
+            curl -X POST https://api.vercel.com/v1/integrations/deploy/${{ secrets.VERCEL_HOOK_ID }}
