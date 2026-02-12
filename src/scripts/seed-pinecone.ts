@@ -1,53 +1,51 @@
-import { getPineconeClient } from "@/lib/pinecone";
-import cosmetics from "../data/beauty_products.json";
-import { InferenceClient } from "@huggingface/inference";
+import { resolve } from "path";
 import { config } from "dotenv";
-config({ path: ".env.local" });
+config({ path: resolve(process.cwd(), ".env.local") });
+
+import { getIndex, EMBEDDING_MODEL_ID } from "../lib/vector/pinecone";
+import cosmetics from "../data/beauty_products.json";
+import { embedMany } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 const products = cosmetics as any[];
 
 const seedPinecone = async () => {
   try {
-    // Initialize clients
-    const indexName = process.env.PINECONE_INDEX || "";
-    const pinecone = getPineconeClient();
-    const index = pinecone.Index(indexName);
-    const hf = new InferenceClient(process.env.HF_TOKEN!);
-
+    const index = getIndex();
     const batchSize = 10;
+
+    console.log(`Seeding Pinecone index with ${products.length} products...`);
+    console.log(`Using embedding model: ${EMBEDDING_MODEL_ID}`);
 
     for (let i = 0; i < products.length; i += batchSize) {
       const batch = products.slice(i, i + batchSize);
+      const values = batch.map((p) => `${p.Product_Name} by ${p.Brand} - ${p.Category}: ${p.Description || ''}`);
 
-      // Generate embeddings
-      const embeddings = await hf.featureExtraction({
-        model: process.env.EMBEDDING_MODEL!,
-        inputs: batch.map(
-          (p) => `${p.Product_Name} by ${p.Brand}`
-        ),
+      const { embeddings } = await embedMany({
+        model: openai.embedding(EMBEDDING_MODEL_ID),
+        values: values,
       });
 
       const upsertRequest = batch.map((product, idx) => ({
         id: product.id,
-        values: Array.isArray(embeddings[idx])
-          ? (embeddings[idx] as number[])
-          : [embeddings[idx] as number],
+        values: embeddings[idx],
         metadata: {
           ...product,
           Category: product.Category,
           Usage_Frequency: product.Usage_Frequency,
+          resourceId: 'seed-cosmetics',
+          content: values[idx]
         },
       }));
 
-        await index.upsert({
-            records: upsertRequest,
-        });
-      console.log(`Processed batch ${i / batchSize + 1}`);
+      // @ts-ignore
+      await index.upsert(upsertRequest);
+      console.log(`Processed batch ${Math.ceil((i + 1) / batchSize)} / ${Math.ceil(products.length / batchSize)}`);
     }
 
-    console.log("Successfully seeded Pinecone DB");
+    console.log("✅ Successfully seeded Pinecone DB");
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error seeding Pinecone:", error);
     process.exit(1);
   }
 };

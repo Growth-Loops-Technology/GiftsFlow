@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { z } from "zod";
 import {
   upsertEmbeddingsWithMetadata,
-} from "@/lib/vector/upstashVector";
+} from "@/lib/vector/pinecone";
 
 export const runtime = "nodejs";
 
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 
     /* ------------------ Delete Old Vectors (Reupload Case) ------------------ */
 
-   
+
 
     /* ------------------------ Parse Excel ------------------------ */
 
