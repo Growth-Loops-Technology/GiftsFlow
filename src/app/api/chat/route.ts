@@ -1,81 +1,80 @@
 import { openai } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
-import { findRelevantContent } from "@/lib/vector/pinecone";
-import { z } from "zod";
+import { streamText } from "ai";
 import beautyProducts from '@/data/beauty_products.json';
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  console.log("\n🎯 ========== NEW CHAT REQUEST ==========");
+
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    console.log("📦 Request body received");
+
+    const { messages } = body;
 
     if (!messages || !Array.isArray(messages)) {
+      console.error("❌ Invalid messages format");
       return new Response("Invalid request", { status: 400 });
     }
 
+    console.log(`📨 Processing ${messages.length} messages`);
+
     const formattedMessages = messages.map((m) => ({
       role: m.role,
-      content:
-        m.parts
-          ?.filter((p: { type: string; text: string; }) => p.type === "text")
-          ?.map((p: { text: string; }) => p.text)
-          ?.join(" ") || m.content || "",
+      content: m.content || "",
     }));
 
-    const lastUserMessage =
-      formattedMessages[formattedMessages.length - 1]?.content;
+    const lastUserMessage = formattedMessages[formattedMessages.length - 1]?.content;
 
     if (!lastUserMessage) {
+      console.error("❌ No user message content found");
       return new Response("Missing message text", { status: 400 });
     }
 
-    const hits = await findRelevantContent(lastUserMessage, 4);
+    console.log("💬 User asked:", lastUserMessage);
 
-    const contextText =
-      hits.length > 0
-        ? hits
-          .map((h) => h.metadata?.content ?? "")
-          .filter(Boolean)
-          .join("\n\n")
-        : "";
+    // Search local products
+    const searchTerms = lastUserMessage.toLowerCase().split(/\s+/);
+    const relevantProducts = beautyProducts.filter(product => {
+      const searchText = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
+      return searchTerms.some(term => searchText.includes(term));
+    }).slice(0, 5);
 
-    const systemPrompt = `You are a helpful gift shop assistant.
-    
-    If the user asks for product recommendations, use the 'suggest_products' tool to find and display them.
-    Answer using the knowledge base below when possible.
-    
-    Knowledge base:
-    ${contextText}`;
+    console.log(`✅ Found ${relevantProducts.length} products`);
+
+    // Build system prompt
+    let systemPrompt = `You are a helpful gift shop assistant specializing in beauty and cosmetic products.`;
+
+    if (relevantProducts.length > 0) {
+      const productList = relevantProducts.map(p =>
+        `- **${p.Product_Name}** by ${p.Brand} (${p.Category}) - $${p.Price_USD}, Rating: ${p.Rating}/5, For: ${p.Skin_Type}`
+      ).join('\n');
+
+      systemPrompt += `\n\nHere are some relevant products from our catalog:\n${productList}\n\nRecommend these products to the user based on their needs.`;
+    } else {
+      systemPrompt += `\n\nNo specific products matched the query, but provide helpful beauty advice.`;
+    }
+
+    console.log("🤖 Calling OpenAI...");
 
     const result = streamText({
       model: openai("gpt-4o-mini"),
       system: systemPrompt,
       messages: formattedMessages,
-      tools: {
-        suggest_products: tool({
-          description: 'Suggest products based on user needs',
-          parameters: z.object({
-            keywords: z.string().describe('Keywords to search for products (e.g., "moisturizer", "lipstick")'),
-          }),
-          // @ts-ignore
-          execute: async ({ keywords }: { keywords: string }) => {
-            const searchTerms = keywords.toLowerCase().split(' ');
-            const relevantProducts = beautyProducts.filter(product => {
-              const text = (product.Product_Name + ' ' + product.Category + ' ' + product.Brand).toLowerCase();
-              return searchTerms.some((term: string) => text.includes(term));
-            }).slice(0, 3); // Limit to top 3
-
-            return relevantProducts;
-          },
-        }) as any,
-      },
     });
 
-    return (result as any).toDataStreamResponse();
+    console.log("✅ Streaming started");
+    return result.toTextStreamResponse();
+
   } catch (error) {
-    console.error("💥 Chat API error:", error);
-    return new Response("Internal Server Error", { status: 500 });
+    console.error("💥 ERROR:", error);
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : "Internal Server Error"
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

@@ -11,41 +11,55 @@ const products = cosmetics as any[];
 
 const seedPinecone = async () => {
   try {
-    const index = getIndex();
-    const batchSize = 10;
+    console.log("🔍 Environment Check:");
+    console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "✅ Set" : "❌ MISSING!");
+    console.log("PINECONE_API_KEY:", process.env.PINECONE_API_KEY ? "✅ Set" : "❌ MISSING!");
+    console.log("PINECONE_INDEX:", process.env.PINECONE_INDEX || "❌ MISSING!");
 
-    console.log(`Seeding Pinecone index with ${products.length} products...`);
-    console.log(`Using embedding model: ${EMBEDDING_MODEL_ID}`);
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY missing");
+    }
+
+    const index = getIndex();
+    const batchSize = products.length;
+
+    console.log(`📦 Seeding ${products.length} products...`);
 
     for (let i = 0; i < products.length; i += batchSize) {
       const batch = products.slice(i, i + batchSize);
-      const values = batch.map((p) => `${p.Product_Name} by ${p.Brand} - ${p.Category}: ${p.Description || ''}`);
 
-      const { embeddings } = await embedMany({
+      const values = batch.map((p) =>
+        `${p.Product_Name} by ${p.Brand}. ${p.Category}. Suitable for ${p.Skin_Type || "all skin types"}. ${p.Description || ""}`
+      );
+
+      const result = await embedMany({
         model: openai.embedding(EMBEDDING_MODEL_ID),
-        values: values,
+        values,
       });
 
-      const upsertRequest = batch.map((product, idx) => ({
-        id: product.id,
-        values: embeddings[idx],
+      const records = batch.map((product, idx) => ({
+        id: String(product.id),
+        values: result.embeddings[idx],
         metadata: {
-          ...product,
+          Product_Name: product.Product_Name,
+          Brand: product.Brand,
           Category: product.Category,
-          Usage_Frequency: product.Usage_Frequency,
-          resourceId: 'seed-cosmetics',
-          content: values[idx]
+          Price_USD: product.Price_USD,
+          Rating: product.Rating,
+          Skin_Type: product.Skin_Type || "All",
+          Product_Size: product.Product_Size || "Unknown",
+          resourceId: "seed-cosmetics",
+          content: values[idx],
         },
       }));
 
-      // @ts-ignore
-      await index.upsert(upsertRequest);
-      console.log(`Processed batch ${Math.ceil((i + 1) / batchSize)} / ${Math.ceil(products.length / batchSize)}`);
+      await index.upsert({ records });
+      console.log(`✅ Upserted ${records.length} products`);
     }
 
-    console.log("✅ Successfully seeded Pinecone DB");
+    console.log("🎉 Pinecone seeded successfully!");
   } catch (error) {
-    console.error("❌ Error seeding Pinecone:", error);
+    console.error("❌ Fatal Error:", error);
     process.exit(1);
   }
 };
