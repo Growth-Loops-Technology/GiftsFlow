@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import * as XLSX from 'xlsx';
 import { z } from "zod";
 import {
   upsertEmbeddingsWithMetadata,
-} from "@/lib/vector/upstashVector";
+} from "@/lib/vector/upstash";
 
 export const runtime = "nodejs";
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = [
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel",
 ];
 
-/* ----------------------------- Utilities ----------------------------- */
 
 function normalizeColumnName(name: string): string {
   return name.trim().toLowerCase();
@@ -49,7 +48,6 @@ function validateAndExtractColumns(rows: Record<string, unknown>[]) {
   return { nameCol, descriptionCol, imageCol, otherCols };
 }
 
-/* --------------------------- Image Metadata --------------------------- */
 
 async function fetchImageMetadata(imageUrl: string) {
   if (!imageUrl.startsWith("http")) {
@@ -77,8 +75,6 @@ async function fetchImageMetadata(imageUrl: string) {
     return { url: imageUrl, valid: false };
   }
 }
-
-/* ------------------------- Row Transformation ------------------------- */
 
 async function rowToChunkWithMetadata(
   row: Record<string, unknown>,
@@ -111,8 +107,6 @@ async function rowToChunkWithMetadata(
 
   return { chunk, imageUrl, imageMetadata };
 }
-
-/* ------------------------------- POST -------------------------------- */
 
 export async function POST(request: Request) {
   try {
@@ -156,14 +150,7 @@ export async function POST(request: Request) {
 
     const resourceId = parsedShopId
       ? `shop-${parsedShopId}`
-      : `batch-${Date.now()}`;
-
-    /* ------------------ Delete Old Vectors (Reupload Case) ------------------ */
-
-   
-
-    /* ------------------------ Parse Excel ------------------------ */
-
+      : `batch-${Date.now()}`
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
 
@@ -187,7 +174,6 @@ export async function POST(request: Request) {
 
     const columns = validateAndExtractColumns(rows);
 
-    /* ---------------- Sequential Processing (Safer) ---------------- */
 
     const rowData = [];
 
@@ -203,7 +189,6 @@ export async function POST(request: Request) {
       );
     }
 
-    /* ----------------------- Upsert Vectors ----------------------- */
 
     await upsertEmbeddingsWithMetadata(resourceId, rowData);
 
