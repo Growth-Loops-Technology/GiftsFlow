@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, User, ShoppingBag, Star, ExternalLink } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 interface Product {
   id: string;
@@ -113,7 +114,14 @@ export default function CosmeticsChatbot() {
                         : "bg-white text-gray-700 border border-gray-100 rounded-bl-none"
                         }`}
                     >
-                      {msg.text}
+                      <ReactMarkdown
+                        components={{
+                          strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        }}
+                      >
+                        {msg.text}
+                      </ReactMarkdown>
                     </div>
                     {msg.role === "user" && (
                       <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">

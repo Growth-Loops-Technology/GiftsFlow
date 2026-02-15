@@ -1,29 +1,24 @@
-import { Pinecone } from "@pinecone-database/pinecone";
+import { Index } from "@upstash/vector";
 import { embed, embedMany } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 export const EMBEDDING_MODEL_ID = "text-embedding-3-small";
 
 /**
- * Pinecone client
+ * Upstash Vector client
  */
-function getClient(): Pinecone {
-    const apiKey = process.env.PINECONE_API_KEY;
-    if (!apiKey) {
-        throw new Error("PINECONE_API_KEY must be set.");
-    }
-    return new Pinecone({ apiKey });
-}
+function getClient(): Index {
+    const url = process.env.UPSTASH_VECTOR_REST_URL;
+    const token = process.env.UPSTASH_VECTOR_REST_TOKEN;
 
-/**
- * Pinecone index
- */
-export function getIndex() {
-    const indexName = process.env.PINECONE_INDEX;
-    if (!indexName) {
-        throw new Error("PINECONE_INDEX must be set.");
+    if (!url || !token) {
+        throw new Error("UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN must be set.");
     }
-    return getClient().index(indexName);
+
+    return new Index({
+        url: url.trim(),
+        token: token.trim(),
+    });
 }
 
 const embeddingModel = openai.embedding(EMBEDDING_MODEL_ID);
@@ -73,17 +68,18 @@ export async function upsertEmbeddings(
     if (chunks.length === 0) return;
 
     const chunkEmbeddings = await generateEmbeddings(chunks);
+    const client = getClient();
 
     const vectors = chunkEmbeddings.map((item, i) => ({
         id: `${resourceId}-${i}`,
-        values: item.embedding,
+        vector: item.embedding,
         metadata: {
             resourceId,
             content: item.content,
         },
     }));
 
-    await getIndex().upsert(vectors);
+    await client.upsert(vectors);
 }
 
 /**
@@ -113,6 +109,7 @@ export async function upsertEmbeddingsWithMetadata(
 
     const chunks = rowData.map((r) => r.chunk);
     const chunkEmbeddings = await generateEmbeddings(chunks);
+    const client = getClient();
 
     const vectors = chunkEmbeddings.map((item, i) => {
         const row = rowData[i];
@@ -138,16 +135,16 @@ export async function upsertEmbeddingsWithMetadata(
 
         return {
             id: `${resourceId}-${i}`,
-            values: item.embedding,
+            vector: item.embedding,
             metadata,
         };
     });
 
-    await getIndex().upsert(vectors);
+    await client.upsert(vectors);
 }
 
 /**
- * Pinecone search result
+ * Upstash search result
  */
 export type RelevantHit = {
     id: string;
@@ -166,23 +163,24 @@ export type RelevantHit = {
 };
 
 /**
- * Query Pinecone
+ * Query Upstash Vector
  */
 export async function findRelevantContent(
     query: string,
     topK: number = 4
 ): Promise<RelevantHit[]> {
     const vector = await generateEmbedding(query);
+    const client = getClient();
 
-    const results = await getIndex().query({
+    const results = await client.query({
         vector,
         topK,
         includeMetadata: true,
     });
 
-    return results.matches.map((match) => ({
-        id: match.id,
+    return results.map((match) => ({
+        id: String(match.id),
         score: match.score || 0,
-        metadata: match.metadata,
+        metadata: match.metadata as RelevantHit['metadata'],
     }));
 }

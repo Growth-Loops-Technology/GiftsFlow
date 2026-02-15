@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findRelevantContent } from "@/lib/vector/pinecone";
+import { findRelevantContent } from "@/lib/vector/upstash";
 import beautyProducts from "@/data/beauty_products.json";
 
 export async function POST(req: Request) {
@@ -11,10 +11,10 @@ export async function POST(req: Request) {
 
         console.log("🔍 Searching for:", query);
 
-        // 🔹 Pinecone search
+        // 🔹 Upstash Vector search
         try {
             const hits = await findRelevantContent(query, 5);
-            console.log(`📊 Pinecone returned ${hits.length} hits`);
+            console.log(`📊 Upstash returned ${hits.length} hits`);
 
             if (hits.length > 0) {
                 const productIds = hits
@@ -26,12 +26,12 @@ export async function POST(req: Request) {
                 );
 
                 if (products.length > 0) {
-                    console.log(`✅ Found ${products.length} products from Pinecone`);
+                    console.log(`✅ Found ${products.length} products from Upstash`);
                     return NextResponse.json({ products });
                 }
             }
         } catch (err) {
-            console.warn("⚠️ Pinecone failed, fallback search");
+            console.warn("⚠️ Upstash failed, fallback search");
         }
 
         // 🔹 Smart local search
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
                 let score = 0;
                 if (text.includes(q)) score += 3;
 
-                q.split(/\s+/).forEach(w => {
+                q.split(/\s+/).forEach((w: string) => {
                     if (text.includes(w)) score += 1;
                 });
 

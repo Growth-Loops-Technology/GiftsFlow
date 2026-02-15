@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { z } from "zod";
 import {
   upsertEmbeddingsWithMetadata,
-} from "@/lib/vector/pinecone";
+} from "@/lib/vector/upstash";
 
 export const runtime = "nodejs";
 
