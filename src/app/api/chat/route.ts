@@ -1,6 +1,18 @@
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
-import beautyProducts from '@/data/beauty_products.json';
+import beautyProductsJson from '@/data/beauty_products.json';
+
+interface BeautyProduct {
+  id: string;
+  Product_Name: string;
+  Brand: string;
+  Category: string;
+  Price_USD: number;
+  Rating: number;
+  Skin_Type: string;
+}
+
+const beautyProducts = beautyProductsJson as unknown as BeautyProduct[];
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -36,25 +48,34 @@ export async function POST(req: Request) {
     console.log("💬 User asked:", lastUserMessage);
 
     // Detect if user is asking for product recommendations
-    const productQueryKeywords = [
-      'product', 'recommend', 'suggestion', 'need', 'want', 'looking for',
-      'show me', 'find', 'search', 'moisturizer', 'cream', 'serum',
-      'cleanser', 'mask', 'toner', 'oil', 'lotion', 'gel', 'balm',
-      'dry skin', 'oily skin', 'sensitive skin', 'acne', 'anti-aging',
-      'gift', 'best', 'good', 'help', 'for'
+    const productKeywords = [
+      'product', 'moisturizer', 'cream', 'serum', 'cleanser', 'mask', 'toner', 'oil', 'lotion', 'gel', 'balm',
+      'face wash', 'lipstick', 'foundation', 'sunscreen', 'shampoo', 'conditioner'
+    ];
+
+    const needsClarificationKeywords = [
+      'gift', 'daughter', 'mother', 'friend', 'someone', 'present', 'recommend', 'suggestion', 'best', 'good', 'help', 'looking for'
     ];
 
     const lowerQuery = lastUserMessage.toLowerCase();
-    const isProductQuery = productQueryKeywords.some(keyword => lowerQuery.includes(keyword));
 
-    console.log(`🔍 Is product query: ${isProductQuery}`);
+    // It's a product query if it mentions specific products or is a vague request that needs narrowing down
+    const isDirectProductQuery = productKeywords.some(keyword => lowerQuery.includes(keyword));
+    const isVagueGiftQuery = needsClarificationKeywords.some(keyword => lowerQuery.includes(keyword));
+
+    const isProductContext = isDirectProductQuery || isVagueGiftQuery;
+
+    console.log(`🔍 Context: Direct=${isDirectProductQuery}, Vague=${isVagueGiftQuery}`);
 
     let relevantProducts: any[] = [];
 
-    // Only search products if user is asking for them
-    if (isProductQuery) {
+    // Higher threshold for specificity if it's a gift query
+    const mentionsSpecificProduct = productKeywords.some(keyword => lowerQuery.includes(keyword));
+    const isActuallySpecific = mentionsSpecificProduct || (lowerQuery.length > 50);
+
+    if (isProductContext && isActuallySpecific) {
       const searchTerms = lastUserMessage.toLowerCase().split(/\s+/);
-      relevantProducts = beautyProducts.filter(product => {
+      relevantProducts = beautyProducts.filter((product: BeautyProduct) => {
         const searchText = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
         return searchTerms.some((term: string) => searchText.includes(term));
       }).slice(0, 5);
@@ -63,20 +84,21 @@ export async function POST(req: Request) {
     }
 
     // Build system prompt
-    let systemPrompt = `You are a helpful gift shop assistant specializing in beauty and cosmetic products.`;
+    let systemPrompt = `You are a consultative gift shop assistant specializing in beauty and cosmetic products.
+    
+    GUIDELINES:
+    1. If a user asks a broad question like "I want a gift for my daughter", DO NOT suggest products immediately.
+    2. Instead, ask 1-2 clarifying questions to narrow down the choice (e.g., her age range, skin type, or if she prefers skincare or makeup).
+    3. Only recommend products once the user's needs are specific enough.
+    4. When recommending, use modern, friendly language and explain WHY you chose those products.
+    5. If no products match, politely explain and offer to help with general advice.`;
 
-    if (isProductQuery) {
-      if (relevantProducts.length > 0) {
-        const productList = relevantProducts.map(p =>
-          `- **${p.Product_Name}** by ${p.Brand} (${p.Category}) - $${p.Price_USD}, Rating: ${p.Rating}/5, For: ${p.Skin_Type}`
-        ).join('\n');
+    if (relevantProducts.length > 0) {
+      const productList = relevantProducts.map(p =>
+        `- **${p.Product_Name}** by ${p.Brand} (${p.Category}) - $${p.Price_USD}, Rating: ${p.Rating}/5, For: ${p.Skin_Type}`
+      ).join('\n');
 
-        systemPrompt += `\n\nHere are some relevant products from our catalog:\n${productList}\n\nRecommend these products to the user based on their needs.`;
-      } else {
-        systemPrompt += `\n\nNo products matched the user's query in our database. Politely let them know: "I couldn't find any matching products in our current collection, but we'll surely work on expanding our catalog in the future! Is there anything else I can help you with?"`;
-      }
-    } else {
-      systemPrompt += `\n\nThe user is just having a conversation (not asking for product recommendations). Respond in a friendly, conversational manner.`;
+      systemPrompt += `\n\nCURRENT PRODUCT MATCHES:\n${productList}\n\nPlease recommend these specific products based on the conversation history.`;
     }
 
     console.log("🤖 Calling OpenAI...");

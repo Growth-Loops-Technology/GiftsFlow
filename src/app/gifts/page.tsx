@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, User, ShoppingBag, Star, ExternalLink } from "lucide-react";
+import { Bot, User, ShoppingBag, Star, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 interface Product {
@@ -27,7 +27,126 @@ interface Message {
   products?: Product[];
 }
 
+// ... (Product and Message interfaces are the same)
+
+function ProductRow({ products }: { products: Product[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(true);
+
+  const scroll = (direction: "left" | "right") => {
+    if (scrollRef.current) {
+      const { scrollLeft, clientWidth } = scrollRef.current;
+      const scrollTo = direction === "left" ? scrollLeft - clientWidth : scrollLeft + clientWidth;
+      scrollRef.current.scrollTo({ left: scrollTo, behavior: "smooth" });
+    }
+  };
+
+  const handleScroll = () => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      setShowLeftArrow(scrollLeft > 10);
+      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  };
+
+  useEffect(() => {
+    // Check initial overflow with multiple attempts
+    const timers = [100, 500, 1000].map(ms => setTimeout(handleScroll, ms));
+    return () => timers.forEach(clearTimeout);
+  }, [products]);
+
+  // If there are more than 2 products, we likely have overflow on mobile/small desktop
+  const hasMultipleProducts = products.length > 2;
+
+  return (
+    <div className="ml-7 w-full relative group pr-6">
+      <p className="text-xs text-gray-500 font-medium mb-2">
+        📦 {products.length} Products Found:
+      </p>
+
+      {/* Navigation Arrows - Using group-hover to ensure they are seen but also always checking overflow */}
+      {(showLeftArrow || (hasMultipleProducts && false)) && (
+        <button
+          onClick={(e) => { e.preventDefault(); scroll("left"); }}
+          className="absolute left-0 top-[64%] -translate-y-1/2 z-30 bg-white shadow-xl rounded-full p-2 border-2 border-amber-200 text-amber-600 hover:bg-amber-50 hover:scale-110 active:scale-95 transition-all -ml-5 flex items-center justify-center cursor-pointer"
+          title="Scroll Left"
+        >
+          <ChevronLeft className="w-6 h-6 stroke-[3px]" />
+        </button>
+      )}
+
+      {(showRightArrow || (hasMultipleProducts && !showLeftArrow)) && (
+        <button
+          onClick={(e) => { e.preventDefault(); scroll("right"); }}
+          className="absolute right-0 top-[64%] -translate-y-1/2 z-30 bg-white shadow-xl rounded-full p-2 border-2 border-amber-200 text-amber-600 hover:bg-amber-50 hover:scale-110 active:scale-95 transition-all mr-0 flex items-center justify-center cursor-pointer"
+          title="Scroll Right"
+        >
+          <ChevronRight className="w-6 h-6 stroke-[3px]" />
+        </button>
+      )}
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex gap-3 overflow-x-auto pb-4 scroll-smooth no-scrollbar"
+        style={{
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          WebkitOverflowScrolling: "touch"
+        }}
+      >
+        {products.map((product) => (
+          <Card
+            key={product.id}
+            className="min-w-[280px] max-w-[280px] bg-gradient-to-br from-white to-amber-50 border-amber-100 hover:shadow-lg transition-all flex-shrink-0"
+          >
+            <CardContent className="p-3">
+              <div className="flex gap-3">
+                <div className="w-20 h-20 bg-gradient-to-tr from-amber-100 via-orange-100 to-amber-50 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm relative group">
+                  <ShoppingBag className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform" />
+                  <div className="absolute top-1 right-1 bg-white/90 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-amber-600">
+                    ${product.Price_USD}
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-bold text-sm text-gray-900 leading-tight line-clamp-2 mb-1">
+                      {product.Product_Name}
+                    </h4>
+                    <p className="text-xs text-amber-600 font-semibold">
+                      {product.Brand}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-1 text-xs text-amber-500 font-medium">
+                      <Star className="w-3 h-3 fill-current" />
+                      <span>{product.Rating}/5</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] px-2 border-amber-200 hover:bg-amber-600 hover:text-white"
+                      onClick={() => window.open("https://example.com", "_blank")}
+                    >
+                      View
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function GiftsChatPage() {
+  // ... (rest of component)
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -58,23 +177,23 @@ export default function GiftsChatPage() {
     setInput("");
     setLoading(true);
 
-    // Detect if user is asking for products
-    const productQueryKeywords = [
-      'product', 'recommend', 'suggestion', 'need', 'want', 'looking for',
-      'show me', 'find', 'search', 'moisturizer', 'cream', 'serum',
-      'cleanser', 'mask', 'toner', 'oil', 'lotion', 'gel', 'balm',
-      'dry skin', 'oily skin', 'sensitive skin', 'acne', 'anti-aging',
-      'gift', 'best', 'good', 'help', 'for'
-    ];
-
     const lowerQuery = userQuery.toLowerCase();
-    const isProductQuery = productQueryKeywords.some(keyword => lowerQuery.includes(keyword));
+
+    // Sync with backend logic: don't fetch products if it's just a vague gift query
+    const productKeywords = [
+      'product', 'moisturizer', 'cream', 'serum', 'cleanser', 'mask', 'toner', 'oil', 'lotion', 'gel', 'balm',
+      'face wash', 'lipstick', 'foundation', 'sunscreen', 'shampoo', 'conditioner'
+    ];
+    const isDirectProductQuery = productKeywords.some(keyword => lowerQuery.includes(keyword));
+    const isSpecificEnough = lowerQuery.length > 50 || isDirectProductQuery;
+
+    // Only search products if it's a direct product query OR a very specific request
+    const shouldFetchProducts = isDirectProductQuery || isSpecificEnough;
 
     try {
       let relevantProducts: Product[] = [];
 
-      // Only fetch products if user is asking for them
-      if (isProductQuery) {
+      if (shouldFetchProducts) {
         const searchRes = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,8 +287,8 @@ export default function GiftsChatPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col gap-4 overflow-hidden pt-4">
-          <ScrollArea className="flex-1 pr-3">
+        <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
+          <ScrollArea className="flex-1 min-h-0 px-4 py-4">
             <div className="space-y-6">
               {messages.map((message) => {
                 const products = message.products || [];
@@ -210,62 +329,7 @@ export default function GiftsChatPage() {
 
                     {/* 🛍️ Products under assistant - Horizontal Scrollable */}
                     {message.role === "assistant" && products.length > 0 && (
-                      <div className="ml-7 w-full">
-                        <p className="text-xs text-gray-500 font-medium mb-2">
-                          📦 {products.length} Products Found:
-                        </p>
-
-                        <div className="flex gap-3 overflow-x-auto pb-2 scroll-smooth">
-                          {products.map((product) => (
-                            <Card
-                              key={product.id}
-                              className="min-w-[280px] max-w-[280px] bg-gradient-to-br from-white to-amber-50 border-amber-100 hover:shadow-lg transition-all flex-shrink-0"
-                            >
-                              <CardContent className="p-3">
-                                <div className="flex gap-3">
-                                  <div className="w-20 h-20 bg-gradient-to-tr from-amber-100 via-orange-100 to-amber-50 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm relative group">
-                                    <ShoppingBag className="w-10 h-10 text-amber-400 group-hover:scale-110 transition-transform" />
-                                    <div className="absolute top-1 right-1 bg-white/90 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-amber-600">
-                                      ${product.Price_USD}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex-1 min-w-0 flex flex-col justify-between">
-                                    <div>
-                                      <h4 className="font-bold text-sm text-gray-900 leading-tight line-clamp-2 mb-1">
-                                        {product.Product_Name}
-                                      </h4>
-                                      <p className="text-xs text-amber-600 font-semibold">
-                                        {product.Brand}
-                                      </p>
-                                    </div>
-
-                                    <div className="flex items-center justify-between mt-2">
-                                      <div className="flex items-center gap-1 text-xs text-amber-500 font-medium">
-                                        <Star className="w-3 h-3 fill-current" />
-                                        <span>{product.Rating}/5</span>
-                                      </div>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 text-[10px] px-2 border-amber-200 hover:bg-amber-600 hover:text-white"
-                                        onClick={() =>
-                                          window.open(
-                                            "https://example.com",
-                                            "_blank"
-                                          )
-                                        }
-                                      >
-                                        View
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      </div>
+                      <ProductRow products={products} />
                     )}
                   </div>
                 );
