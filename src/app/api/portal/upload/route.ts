@@ -165,6 +165,8 @@ export async function POST(request: Request) {
     const sheet = workbook.Sheets[firstSheetName];
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
+    console.log(`[Portal Upload] Found ${rows.length} rows in sheet "${firstSheetName}"`);
+
     if (rows.length === 0) {
       return NextResponse.json(
         { error: "No data rows found." },
@@ -172,25 +174,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const columns = validateAndExtractColumns(rows);
-
-
-    const rowData = [];
-
-    for (const row of rows) {
-      rowData.push(
-        await rowToChunkWithMetadata(
-          row,
-          columns.nameCol,
-          columns.descriptionCol,
-          columns.imageCol,
-          columns.otherCols
-        )
-      );
+    let columns;
+    try {
+      columns = validateAndExtractColumns(rows);
+      console.log(`[Portal Upload] Columns validated:`, columns);
+    } catch (err: any) {
+      console.error(`[Portal Upload] Column validation failed:`, err.message);
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
 
+    console.log(`[Portal Upload] Starting parallel processing of ${rows.length} rows...`);
 
+    // Process rows in parallel to avoid timeouts
+    const rowData = await Promise.all(
+      rows.map(async (row, index) => {
+        try {
+          return await rowToChunkWithMetadata(
+            row,
+            columns.nameCol,
+            columns.descriptionCol,
+            columns.imageCol,
+            columns.otherCols
+          );
+        } catch (err: any) {
+          console.error(`[Portal Upload] Error processing row ${index + 1}:`, err.message);
+          throw err; // Re-throw to be caught by the outer catch
+        }
+      })
+    );
+
+    console.log(`[Portal Upload] Finished row processing. Generating embeddings and upserting to Upstash...`);
     await upsertEmbeddingsWithMetadata(resourceId, rowData);
+    console.log(`[Portal Upload] Successfully upserted ${rowData.length} vectors to resource ${resourceId}`);
 
     const validImages = rowData.filter((r) => r.imageMetadata.valid).length;
 
@@ -201,7 +216,7 @@ export async function POST(request: Request) {
       imagesValid: validImages,
       imagesInvalid: rowData.length - validImages,
     });
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Invalid shopId." },
@@ -212,7 +227,7 @@ export async function POST(request: Request) {
     console.error("Portal upload error:", err);
 
     return NextResponse.json(
-      { error: "Failed to process upload. Check server logs." },
+      { error: err.message || "Failed to process upload. Check server logs." },
       { status: 500 }
     );
   }

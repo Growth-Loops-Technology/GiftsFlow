@@ -107,10 +107,12 @@ export async function upsertEmbeddingsWithMetadata(
 ): Promise<void> {
     if (rowData.length === 0) return;
 
+    console.log(`[Upstash] Generating embeddings for ${rowData.length} chunks...`);
     const chunks = rowData.map((r) => r.chunk);
     const chunkEmbeddings = await generateEmbeddings(chunks);
     const client = getClient();
 
+    console.log(`[Upstash] Upserting ${chunkEmbeddings.length} vectors for resource ${resourceId}...`);
     const vectors = chunkEmbeddings.map((item, i) => {
         const row = rowData[i];
 
@@ -141,6 +143,7 @@ export async function upsertEmbeddingsWithMetadata(
     });
 
     await client.upsert(vectors);
+    console.log(`[Upstash] Successfully upserted to resource ${resourceId}`);
 }
 
 /**
