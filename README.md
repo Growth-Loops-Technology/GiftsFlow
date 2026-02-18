@@ -41,7 +41,6 @@ Build delightful gifting experiences powered by chat, AI, and automation.
 Gifting is emotional. Systems are complex.  
 **GiftsFlow** makes it simple:
 
-
 **Intent → Conversation → Recommendation → Action**
 
 ---
@@ -51,14 +50,14 @@ Gifting is emotional. Systems are complex.
 | Layer        | Technology |
 |-------------|------------|
 | **Frontend** | Next.js |
-| **Backend**  | API-first (Next.js / Serverless) |
-| **AI**       | OpenAI (LLM-powered chat & recommendations) |
-| **Vector DB**| Pinecone (semantic search & memory) |
+| **Backend** | API-first (Next.js / Serverless) |
+| **AI** | OpenAI (LLM-powered chat & recommendations) |
+| **Vector DB**| **Upstash** (Serverless semantic search & memory) |
 | **Database** | MongoDB / PostgreSQL (configurable) |
 | **Deployment** | Vercel |
 | **SDK** | Vercel AI SDK |
 
-<sub>Infrastructure choices are intentionally flexible.</sub>
+<sub>Infrastructure choices are optimized for serverless performance and low latency.</sub>
 
 ---
 
@@ -68,7 +67,7 @@ Gifting is emotional. Systems are complex.
 - **Gift Catalog** — products, bundles, metadata  
 - **Recommendation Engine** — AI + rules-based logic  
 - **Workflow Builder** — occasions & campaign automation  
-- **User Context Store** — preferences, history, memory  
+- **User Context Store** — preferences, history, memory (powered by Upstash)  
 - **Analytics** — engagement & conversion insights  
 
 ---
@@ -79,4 +78,5 @@ Gifting is emotional. Systems are complex.
 git clone https://github.com/Growth-Loops-Technology/GiftsFlow.git
 cd giftsflow
 npm install
+# Configure UPSTASH_VECTOR_REST_URL and UPSTASH_VECTOR_REST_TOKEN in .env
 npm run dev
