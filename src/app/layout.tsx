@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   description: "GiftsFlow is a smart gift finder that helps you find the perfect gift for your loved ones.",
 };
 
+import { CartProvider } from "@/context/cart-context";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,8 +30,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Header />
-        {children}
+        <CartProvider>
+          <Header />
+          {children}
+        </CartProvider>
       </body>
     </html>
   );
