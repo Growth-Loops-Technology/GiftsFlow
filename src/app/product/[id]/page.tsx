@@ -5,6 +5,9 @@ import { ShoppingBag, Star, ChevronRight, ShieldCheck, Truck, RefreshCcw } from 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
+import { useCart } from "@/context/cart-context";
+import { useRouter } from "next/navigation";
+import Header from "@/components/headers/topbar";
 
 interface Product {
     id: string;
@@ -22,8 +25,10 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
     const params = use(paramsPromise);
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
-    const [zoomPos, setZoomPos] = useState({ x: 0, y: 0, isHovered: false });
+    const [zoomPos, setZoomPos] = useState({ x: 0, y: 0, isHovered: false, lensX: 0, lensY: 0 });
     const imageContainerRef = useRef<HTMLDivElement>(null);
+    const { addToCart } = useCart();
+    const router = useRouter();
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -44,9 +49,50 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!imageContainerRef.current) return;
         const { left, top, width, height } = imageContainerRef.current.getBoundingClientRect();
-        const x = ((e.clientX - left) / width) * 100;
-        const y = ((e.clientY - top) / height) * 100;
-        setZoomPos({ x, y, isHovered: true });
+
+        // Calculate position relative to the image container
+        let x = e.clientX - left;
+        let y = e.clientY - top;
+
+        // Constraints for the lens (assume lens is 200x200)
+        const lensSize = 250;
+        x = Math.max(lensSize / 2, Math.min(x, width - lensSize / 2));
+        y = Math.max(lensSize / 2, Math.min(y, height - lensSize / 2));
+
+        // Background position in percentage
+        const bgX = ((x - lensSize / 2) / (width - lensSize)) * 100;
+        const bgY = ((y - lensSize / 2) / (height - lensSize)) * 100;
+
+        setZoomPos({
+            x: bgX,
+            y: bgY,
+            isHovered: true,
+            lensX: x - lensSize / 2,
+            lensY: y - lensSize / 2
+        });
+    };
+
+    const handleAddToCart = () => {
+        if (!product) return;
+        addToCart({
+            id: product.id,
+            name: product.Product_Name,
+            price: product.Price_USD,
+            quantity: 1,
+            imageUrl: product.imageUrl
+        });
+    };
+
+    const handleBuyNow = () => {
+        if (!product) return;
+        addToCart({
+            id: product.id,
+            name: product.Product_Name,
+            price: product.Price_USD,
+            quantity: 1,
+            imageUrl: product.imageUrl
+        });
+        router.push("/checkout");
     };
 
     if (loading) {
@@ -70,21 +116,6 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
 
     return (
         <div className="min-h-screen bg-white">
-            <header className="border-b border-gray-200 bg-white sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-                    <Link href="/">
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent flex items-center gap-2">
-                            <ShoppingBag className="w-8 h-8 text-purple-600" />
-                            GiftsFlow
-                        </h1>
-                    </Link>
-                    <nav className="flex items-center gap-6 text-sm font-medium text-gray-600">
-                        <Link href="/cosmetics" className="hover:text-purple-600 transition-colors">Cosmetics</Link>
-                        <Link href="/gifts" className="hover:text-purple-600 transition-colors">Gift Finder</Link>
-                    </nav>
-                </div>
-            </header>
-
             <main className="max-w-7xl mx-auto px-4 py-8">
                 {/* Breadcrumbs */}
                 <div className="flex items-center gap-2 text-xs text-gray-500 mb-8 overflow-hidden whitespace-nowrap">
@@ -114,23 +145,38 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
                                 <ShoppingBag className="w-40 h-40 text-purple-100" />
                             )}
 
-                            {/* Zoom Lens */}
+                            {/* Zoom Lens (The square on the image) */}
                             {zoomPos.isHovered && product.imageUrl && (
                                 <div
-                                    className="absolute inset-0 pointer-events-none transition-opacity duration-200"
+                                    className="absolute border border-purple-400 bg-white/20 pointer-events-none z-10"
                                     style={{
-                                        background: `url('${product.imageUrl}') no-repeat`,
-                                        backgroundSize: '200%',
-                                        backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
-                                        opacity: 1
+                                        width: '250px',
+                                        height: '250px',
+                                        left: `${zoomPos.lensX}px`,
+                                        top: `${zoomPos.lensY}px`,
+                                        boxShadow: '0 0 0 1000px rgba(0,0,0,0.1)'
                                     }}
                                 />
                             )}
+
 
                             <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-lg font-bold text-purple-600 shadow-sm border border-purple-50">
                                 ${product.Price_USD}
                             </div>
                         </div>
+
+                        {/* External Zoom Result - Positioned relative to the lg:col-span-5 container */}
+                        {zoomPos.isHovered && product.imageUrl && (
+                            <div
+                                className="absolute left-[105%] top-0 w-200 h-160 bg-white border border-gray-200 shadow-2xl z-[100] rounded-2xl overflow-hidden hidden lg:block"
+                                style={{
+                                    backgroundImage: `url('${product.imageUrl}')`,
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundSize: '300%', // Zoom level
+                                    backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
+                                }}
+                            />
+                        )}
 
                         {/* Static Placeholder info since we only have one "image" type right now */}
                         <div className="flex gap-4 mt-6">
@@ -206,10 +252,17 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
                                 </div>
 
                                 <div className="flex flex-col gap-3">
-                                    <Button className="w-full bg-purple-600 hover:bg-purple-700 h-14 rounded-xl text-lg font-bold shadow-lg shadow-purple-100">
+                                    <Button
+                                        onClick={handleAddToCart}
+                                        className="w-full bg-purple-600 hover:bg-purple-700 h-14 rounded-xl text-lg font-bold shadow-lg shadow-purple-100"
+                                    >
                                         Add to Cart
                                     </Button>
-                                    <Button variant="outline" className="w-full border-purple-200 text-purple-600 hover:bg-purple-50 h-14 rounded-xl text-lg font-bold">
+                                    <Button
+                                        onClick={handleBuyNow}
+                                        variant="outline"
+                                        className="w-full border-purple-200 text-purple-600 hover:bg-purple-50 h-14 rounded-xl text-lg font-bold"
+                                    >
                                         Buy Now
                                     </Button>
                                     <p className="text-[10px] text-gray-400 text-center mt-2 leading-tight">
