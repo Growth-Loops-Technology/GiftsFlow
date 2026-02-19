@@ -187,3 +187,43 @@ export async function findRelevantContent(
         metadata: match.metadata as RelevantHit['metadata'],
     }));
 }
+
+/**
+ * Fetch a single vector by ID from Upstash
+ */
+export async function fetchVectorById(id: string): Promise<RelevantHit | null> {
+    const client = getClient();
+    const results = await client.fetch([id], { includeMetadata: true });
+
+    if (!results || results.length === 0 || !results[0]) {
+        return null;
+    }
+
+    const match = results[0];
+    return {
+        id: String(match.id),
+        score: 1, // Full match by ID
+        metadata: match.metadata as RelevantHit['metadata'],
+    };
+}
+
+/**
+ * List vectors from Upstash (useful for the cosmetics listing)
+ */
+export async function listVectors(limit: number = 20, cursor: string = "0"): Promise<{ products: RelevantHit[], nextCursor: string }> {
+    const client = getClient();
+    const results = await client.range({
+        cursor,
+        limit,
+        includeMetadata: true,
+    });
+
+    return {
+        products: results.vectors.map(v => ({
+            id: String(v.id),
+            score: 1,
+            metadata: v.metadata as RelevantHit['metadata'],
+        })),
+        nextCursor: results.nextCursor,
+    };
+}
