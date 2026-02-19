@@ -17,6 +17,7 @@ interface Product {
   Rating: number;
   Product_Size: string;
   Skin_Type: string;
+  imageUrl?: string;
 }
 
 interface Message {
