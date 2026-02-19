@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { findRelevantContent } from "@/lib/vector/upstash";
 import beautyProducts from "@/data/beauty_products.json";
 
 export async function POST(req: Request) {
@@ -9,54 +8,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Query is required" }, { status: 400 });
         }
 
-        console.log("🔍 Searching for:", query);
+        console.log("🔍 Searching locally for:", query);
 
-        // 🔹 Upstash Vector search
-        try {
-            const hits = await findRelevantContent(query, 5);
-            console.log(`📊 Upstash returned ${hits.length} hits`);
+        const searchTerms = query.toLowerCase().split(/\s+/);
 
-            if (hits.length > 0) {
-                const productIds = hits
-                    .map(hit => hit.metadata?.resourceId || hit.id)
-                    .filter(Boolean);
+        const products = (beautyProducts as any[]).filter(product => {
+            const searchText = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
+            return searchTerms.some((term: string) => searchText.includes(term));
+        }).slice(0, 10);
 
-                const products = beautyProducts.filter(product =>
-                    productIds.includes(product.id)
-                );
-
-                if (products.length > 0) {
-                    console.log(`✅ Found ${products.length} products from Upstash`);
-                    return NextResponse.json({ products });
-                }
-            }
-        } catch (err) {
-            console.warn("⚠️ Upstash failed, fallback search");
-        }
-
-        // 🔹 Smart local search
-        console.log("📦 Using smart local search...");
-        const q = query.toLowerCase();
-
-        const products = beautyProducts
-            .map(product => {
-                const text = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
-
-                let score = 0;
-                if (text.includes(q)) score += 3;
-
-                q.split(/\s+/).forEach((w: string) => {
-                    if (text.includes(w)) score += 1;
-                });
-
-                return { product, score };
-            })
-            .filter(p => p.score > 0)
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 5)
-            .map(p => p.product);
-
-        console.log(`✅ Found ${products.length} products locally`);
+        console.log(`✅ Returning ${products.length} products found locally`);
         return NextResponse.json({ products });
 
     } catch (error) {

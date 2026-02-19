@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, User, ShoppingBag, Star, ExternalLink, MessageCircle, X, ChevronUp, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 
 interface Product {
   id: string;
@@ -16,6 +17,7 @@ interface Product {
   Rating: number;
   Product_Size: string;
   Skin_Type: string;
+  imageUrl?: string;
 }
 
 interface Message {
@@ -137,7 +139,15 @@ export default function CosmeticsPage() {
               {displayProducts.map((product) => (
                 <Card key={product.id} className="group hover:shadow-xl transition-all duration-300 border-gray-100 overflow-hidden bg-white">
                   <div className="aspect-square bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center relative overflow-hidden">
-                    <ShoppingBag className="w-20 h-20 text-purple-100 group-hover:scale-110 transition-transform duration-500" />
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.Product_Name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    ) : (
+                      <ShoppingBag className="w-20 h-20 text-purple-100 group-hover:scale-110 transition-transform duration-500" />
+                    )}
                     <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-sm font-bold text-purple-600 shadow-sm border border-purple-50">
                       ${product.Price_USD}
                     </div>
@@ -159,14 +169,15 @@ export default function CosmeticsPage() {
                         <Star className="w-4 h-4 fill-current" />
                         <span>{product.Rating}</span>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-9 px-4 text-xs font-bold rounded-full border-purple-100 text-purple-600 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
-                        onClick={() => window.open('https://example.com', '_blank')}
-                      >
-                        View Details
-                      </Button>
+                      <Link href={`/product/${product.id}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 px-4 text-xs font-bold rounded-full border-purple-100 text-purple-600 hover:bg-purple-600 hover:text-white transition-all shadow-sm"
+                        >
+                          View Details
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -247,7 +258,7 @@ export default function CosmeticsPage() {
                                   <p className="font-bold text-[10px] text-gray-900 truncate leading-none mb-0.5">{product.Product_Name}</p>
                                   <p className="text-[10px] text-purple-600 font-medium">${product.Price_USD}</p>
                                 </div>
-                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => window.open('https://example.com', '_blank')}>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => window.location.href = `/product/${product.id}`}>
                                   <ExternalLink className="w-3 h-3" />
                                 </Button>
                               </div>

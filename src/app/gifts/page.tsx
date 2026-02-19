@@ -94,8 +94,16 @@ function ProductRow({ products }: { products: Product[] }) {
           >
             <CardContent className="p-3">
               <div className="flex gap-3">
-                <div className="w-20 h-20 bg-amber-100 rounded-lg flex items-center justify-center relative">
-                  <ShoppingBag className="w-8 h-8 text-amber-400" />
+                <div className="w-20 h-20 bg-amber-100 rounded-lg flex items-center justify-center relative overflow-hidden shrink-0">
+                  {product.imageUrl ? (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.Product_Name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ShoppingBag className="w-8 h-8 text-amber-400" />
+                  )}
                   <div className="absolute top-1 right-1 bg-white px-2 py-0.5 text-[10px] rounded-full font-bold text-amber-600">
                     ${product.Price_USD}
                   </div>
@@ -116,13 +124,15 @@ function ProductRow({ products }: { products: Product[] }) {
                       <Star className="w-3 h-3 fill-current" />
                       {product.Rating}/5
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 text-[10px] px-2"
-                    >
-                      View
-                    </Button>
+                    <Link href={`/product/${product.id}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-2"
+                      >
+                        View
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -245,22 +255,20 @@ export default function GiftsChatPage() {
             {messages.map((message) => (
               <div key={message.id} className="flex flex-col gap-3">
                 <div
-                  className={`flex items-start gap-2 ${
-                    message.role === "user"
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
+                  className={`flex items-start gap-2 ${message.role === "user"
+                    ? "justify-end"
+                    : "justify-start"
+                    }`}
                 >
                   {message.role === "assistant" && (
                     <Bot className="w-5 h-5 text-amber-600 mt-1" />
                   )}
 
                   <div
-                    className={`rounded-xl px-4 py-2 max-w-[85%] text-sm shadow break-words whitespace-pre-wrap ${
-                      message.role === "user"
-                        ? "bg-amber-600 text-white"
-                        : "bg-white text-gray-800"
-                    }`}
+                    className={`rounded-xl px-4 py-2 max-w-[85%] text-sm shadow break-words whitespace-pre-wrap ${message.role === "user"
+                      ? "bg-amber-600 text-white"
+                      : "bg-white text-gray-800"
+                      }`}
                   >
                     <ReactMarkdown>{message.content}</ReactMarkdown>
                   </div>
