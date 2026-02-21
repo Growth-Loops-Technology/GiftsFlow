@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 import * as XLSX from 'xlsx';
 import { z } from "zod";
 import {
@@ -108,8 +109,26 @@ async function rowToChunkWithMetadata(
   return { chunk, imageUrl, imageMetadata };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const token = await getToken({ req: request });
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please login first." },
+        { status: 401 }
+      );
+    }
+
+    // Check if user is vendor or admin
+    if (token.role !== "VENDOR" && token.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden. Only vendors and admins can upload products." },
+        { status: 403 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
     const shopId = formData.get("shopId");

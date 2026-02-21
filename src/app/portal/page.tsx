@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,10 +10,52 @@ import { Upload, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
 
 export default function PortalPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [shopId, setShopId] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Redirect if not authenticated or not vendor/admin
+  if (status === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 p-4">
+        <Card className="w-full max-w-md shadow-xl rounded-2xl">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="mb-4 text-gray-600">You need to login to access the vendor portal</p>
+              <Button onClick={() => router.push("/auth/login")} className="w-full">
+                Go to Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (status === "loading") {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  const userRole = (session?.user as any)?.role;
+  if (userRole !== "VENDOR" && userRole !== "ADMIN") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 p-4">
+        <Card className="w-full max-w-md shadow-xl rounded-2xl">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <p className="mb-4 text-gray-600">You don't have access to the vendor portal</p>
+              <Button onClick={() => router.push("/")} className="w-full">
+                Go Home
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,11 +102,23 @@ export default function PortalPage() {
             Gift Shop Portal
           </CardTitle>
           <p className="text-center text-sm text-muted-foreground">
-            Upload your product data (Excel). Rows will be embedded and stored for search.
+            Welcome, {session?.user?.name}! Upload your product data (Excel).
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {message && (
+              <div
+                className={`p-3 rounded-lg ${
+                  message.type === "success"
+                    ? "bg-green-50 border border-green-200 text-green-700"
+                    : "bg-red-50 border border-red-200 text-red-700"
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium mb-1 block">Shop ID (optional)</label>
               <Input
@@ -78,7 +134,7 @@ export default function PortalPage() {
                 </label>
                 <a
                   className="text-sm underline text-muted-foreground hover:text-foreground"
-                  href="/sample-gift-upload.xlsx"
+                  href="/sample-gift-upload.csv"
                   download
                 >
                   Download sample
@@ -99,25 +155,9 @@ export default function PortalPage() {
             </div>
             <Button type="submit" disabled={loading} className="gap-2">
               <Upload className="w-4 h-4" />
-              {loading ? "Uploading…" : "Upload & embed"}
+              {loading ? "Uploading..." : "Upload Excel"}
             </Button>
           </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            <Link href="/gifts" className="underline">
-              Chat over your uploaded data
-            </Link>
-          </p>
-          {message && (
-            <div
-              className={`mt-4 p-3 rounded-lg text-sm ${
-                message.type === "success"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200"
-                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200"
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

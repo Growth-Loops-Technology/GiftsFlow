@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import beautyProducts from "@/data/beauty_products.json";
+import { searchProducts } from "@/lib/vector/upstash";
 
 export async function POST(req: Request) {
     try {
@@ -8,16 +8,11 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Query is required" }, { status: 400 });
         }
 
-        console.log("🔍 Searching locally for:", query);
+        console.log("🔍 Searching Upstash Vector DB for:", query);
 
-        const searchTerms = query.toLowerCase().split(/\s+/);
+        const products = await searchProducts(query, 10);
 
-        const products = (beautyProducts as any[]).filter(product => {
-            const searchText = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
-            return searchTerms.some((term: string) => searchText.includes(term));
-        }).slice(0, 10);
-
-        console.log(`✅ Returning ${products.length} products found locally`);
+        console.log(`✅ Returning ${products.length} products found`);
         return NextResponse.json({ products });
 
     } catch (error) {
