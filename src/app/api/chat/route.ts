@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
-import beautyProductsJson from '@/data/beauty_products.json';
+import { searchProducts } from "@/lib/vector/upstash";
 
 interface BeautyProduct {
   id: string;
@@ -12,8 +12,6 @@ interface BeautyProduct {
   Skin_Type: string;
   imageUrl?: string;
 }
-
-const beautyProducts = beautyProductsJson as unknown as BeautyProduct[];
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -46,17 +44,28 @@ export async function POST(req: Request) {
     const isVagueGiftQuery = needsClarificationKeywords.some(keyword => lowerQuery.includes(keyword));
     const isProductContext = isDirectProductQuery || isVagueGiftQuery;
 
-    let relevantProducts: any[] = [];
+    let relevantProducts: BeautyProduct[] = [];
     const isActuallySpecific = isDirectProductQuery || (lowerQuery.length > 50);
 
     if (isProductContext && isActuallySpecific) {
-      const searchTerms = lowerQuery.split(/\s+/);
-      relevantProducts = beautyProducts.filter((product: BeautyProduct) => {
-        const searchText = `${product.Product_Name} ${product.Category} ${product.Brand} ${product.Skin_Type}`.toLowerCase();
-        return searchTerms.some((term: string) => searchText.includes(term));
-      }).slice(0, 5);
+      try {
+        const products = await searchProducts(lastUserMessage, 5);
+        relevantProducts = products.map(p => ({
+          id: p.id,
+          Product_Name: p.Product_Name,
+          Brand: p.Brand,
+          Category: p.Category,
+          Price_USD: p.Price_USD,
+          Rating: p.Rating,
+          Skin_Type: p.Skin_Type,
+          imageUrl: p.imageUrl,
+        } as BeautyProduct));
 
-      console.log(`✅ Found ${relevantProducts.length} products locally`);
+        console.log(`✅ Found ${relevantProducts.length} products from Upstash`);
+      } catch (error) {
+        console.error("Error searching products:", error);
+        relevantProducts = [];
+      }
     }
 
     // Build system prompt

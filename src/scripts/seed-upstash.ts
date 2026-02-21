@@ -57,6 +57,8 @@ async function seedUpstash() {
                 price: product.Price_USD,
                 rating: product.Rating,
                 skinType: product.Skin_Type,
+                imageUrl: product.imageUrl || "",
+                productSize: product.Product_Size || "",
             },
         }));
 

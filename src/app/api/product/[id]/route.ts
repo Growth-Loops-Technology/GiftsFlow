@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import beautyProducts from "@/data/beauty_products.json";
+import { getAllProducts } from "@/lib/vector/upstash";
 
 export async function GET(
     req: Request,
@@ -8,7 +8,9 @@ export async function GET(
     try {
         const { id } = await params;
 
-        const product = (beautyProducts as any[]).find(p => p.id === id);
+        // Get all products and find by ID
+        const products = await getAllProducts(10000);
+        const product = products.find(p => p.id === id);
 
         if (product) {
             return NextResponse.json(product);

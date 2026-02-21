@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { useCart } from "@/context/cart-context";
 import { useRouter } from "next/navigation";
-import Header from "@/components/headers/topbar";
+import { useSession } from "next-auth/react";
+import { AuthCheckModal } from "@/components/auth/auth-check-modal";
 
 interface Product {
     id: string;
@@ -26,9 +27,12 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
     const [product, setProduct] = useState<Product | null>(null);
     const [loading, setLoading] = useState(true);
     const [zoomPos, setZoomPos] = useState({ x: 0, y: 0, isHovered: false, lensX: 0, lensY: 0 });
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [pendingAction, setPendingAction] = useState<"addToCart" | "buyNow" | null>(null);
     const imageContainerRef = useRef<HTMLDivElement>(null);
     const { addToCart } = useCart();
     const router = useRouter();
+    const { data: session } = useSession();
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -73,6 +77,12 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
     };
 
     const handleAddToCart = () => {
+        if (!session?.user) {
+            setPendingAction("addToCart");
+            setShowAuthModal(true);
+            return;
+        }
+
         if (!product) return;
         addToCart({
             id: product.id,
@@ -84,6 +94,12 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
     };
 
     const handleBuyNow = () => {
+        if (!session?.user) {
+            setPendingAction("buyNow");
+            setShowAuthModal(true);
+            return;
+        }
+
         if (!product) return;
         addToCart({
             id: product.id,
@@ -93,6 +109,35 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
             imageUrl: product.imageUrl
         });
         router.push("/checkout");
+    };
+
+    const handleAuthModalClose = () => {
+        setShowAuthModal(false);
+        setPendingAction(null);
+    };
+
+    const handleAuthModalAuthenticated = () => {
+        if (product) {
+            if (pendingAction === "addToCart") {
+                addToCart({
+                    id: product.id,
+                    name: product.Product_Name,
+                    price: product.Price_USD,
+                    quantity: 1,
+                    imageUrl: product.imageUrl
+                });
+            } else if (pendingAction === "buyNow") {
+                addToCart({
+                    id: product.id,
+                    name: product.Product_Name,
+                    price: product.Price_USD,
+                    quantity: 1,
+                    imageUrl: product.imageUrl
+                });
+                router.push("/checkout");
+            }
+        }
+        handleAuthModalClose();
     };
 
     if (loading) {
@@ -274,6 +319,13 @@ export default function ProductPage({ params: paramsPromise }: { params: Promise
                     </div>
                 </div>
             </main>
+
+            {/* Auth Check Modal */}
+            <AuthCheckModal 
+                isOpen={showAuthModal} 
+                onClose={handleAuthModalClose}
+                onAuthenticated={handleAuthModalAuthenticated}
+            />
         </div>
     );
 }
